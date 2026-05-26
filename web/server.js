@@ -105,6 +105,7 @@ async function handleAnalyze(res, payload) {
 
   sendJson(res, 200, {
     model: OPENAI_MODEL,
+    analysis: parseAnalysis(extractText(data)),
     output: extractText(data),
   });
 }
@@ -123,9 +124,88 @@ function buildInstructions(mode, genre, audience) {
     `Mode: ${mode}. ${task}`,
     `Genre/context: ${genre}. Audience/context: ${audience}.`,
     "Keep the response practical, readable, and evidence-led.",
+    "Return only valid JSON with this shape:",
+    JSON.stringify(analysisContract(), null, 2),
+    "For reviewer mode, make reviewer_notes detailed and forensic, and leave guidance arrays empty.",
+    "For author mode, include guidance.keep, guidance.priorities, and guidance.rewrites. Keep reviewer_notes shorter.",
     "Skill reference:",
     skillContext,
   ].join("\n\n");
+}
+
+function analysisContract() {
+  return {
+    classification: "Likely human-written | Likely AI-generated | Hybrid / AI-assisted | Insufficient signal",
+    confidence: "High | Moderate | Low",
+    confidence_rationale: "One sentence explaining what drives confidence.",
+    executive_summary: "Two to three sentences with the bottom-line read.",
+    context_notes: ["Genre, sample length, false-positive, or audience caveats."],
+    evidence: [
+      {
+        signal: "Named signal from the taxonomy",
+        category: "Linguistic | Structural | Narrative/content | Human-positive",
+        direction: "AI-leaning | Human-leaning | Ambiguous",
+        reliability: "Strong | Moderate | Weak/noisy",
+        excerpt: "Short verbatim excerpt from the submitted text",
+        read: "One sentence explaining why this signal matters.",
+      },
+    ],
+    counter_evidence: [
+      {
+        point: "Counter-signal or innocent explanation",
+        excerpt: "Optional short excerpt",
+        read: "Why this limits the assessment.",
+      },
+    ],
+    section_map: [
+      {
+        section: "Opening | middle | close | named section",
+        assessment: "Human-leaning | AI-leaning | Hybrid | Insufficient signal",
+        notes: "What changes by section.",
+      },
+    ],
+    reviewer_notes: {
+      risk_level: "Low | Medium | High | Not applicable",
+      strongest_case: "Best argument for the classification.",
+      weakest_case: "Best argument against the classification.",
+      what_would_change: "What evidence would change the read.",
+      next_questions: ["Question a reviewer would ask before relying on this assessment."],
+    },
+    guidance: {
+      keep: ["Human signals or voice features worth preserving."],
+      priorities: [
+        {
+          title: "Specific improvement area",
+          rationale: "Why this matters for authenticity.",
+          action: "Concrete edit to make.",
+        },
+      ],
+      rewrites: [
+        {
+          before: "Short original excerpt",
+          after: "Voice-preserving revision",
+          note: "What changed and why.",
+        },
+      ],
+      closing_note: "Short coaching note.",
+    },
+  };
+}
+
+function parseAnalysis(output) {
+  try {
+    return JSON.parse(output);
+  } catch {
+    const match = output.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
 }
 
 function extractText(data) {

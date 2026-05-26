@@ -170,3 +170,5 @@ The app exposes:
 
 - `GET /api/config` — reports whether the server sees an API key.
 - `POST /api/analyze` — runs reviewer or author-mode analysis against the submitted text.
+
+Reviewer mode returns a structured forensic memo: classification, confidence rationale, evidence cards, counter-evidence, section map, and reviewer reliance questions. Author mode uses the same signal analysis but adds coaching: what to keep, priority fixes, and before/after rewrite examples.

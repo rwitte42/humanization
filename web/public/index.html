@@ -22,11 +22,11 @@
             <div class="control-row" role="group" aria-label="Analysis mode">
               <label class="segmented">
                 <input type="radio" name="mode" value="reviewer" checked />
-                <span>Review</span>
+                <span>Reviewer</span>
               </label>
               <label class="segmented">
                 <input type="radio" name="mode" value="author" />
-                <span>Humanize</span>
+                <span>Author</span>
               </label>
             </div>
 
@@ -52,6 +52,7 @@
             <label class="sample-field">
               <span>Text sample</span>
               <textarea
+                id="textSample"
                 name="text"
                 rows="18"
                 placeholder="Paste the draft or sample you want assessed..."
@@ -59,9 +60,15 @@
               ></textarea>
             </label>
 
+            <div class="sample-stats" aria-live="polite">
+              <span id="wordCount">0 words</span>
+              <span id="charCount">0 characters</span>
+              <span id="signalDepth">Needs more signal</span>
+            </div>
+
             <div class="actions">
-              <button class="primary" type="submit">
-                <span>Analyze</span>
+              <button class="primary" type="submit" id="submitButton">
+                <span id="submitLabel">Build reviewer memo</span>
               </button>
               <button class="secondary" type="button" id="clearButton">
                 <span>Clear</span>
@@ -79,8 +86,10 @@
             <span class="model-pill" id="modelPill">Model pending</span>
           </div>
           <div class="result-output" id="resultOutput">
-            Paste a sample, choose whether you want an audit or author-mode
-            guidance, then run the analysis.
+            <div class="empty-state">
+              <span class="empty-mark">H</span>
+              <p>Paste a sample, choose a lens, then run the analysis.</p>
+            </div>
           </div>
         </aside>
       </section>
