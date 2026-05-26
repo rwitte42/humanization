@@ -172,3 +172,5 @@ The app exposes:
 - `POST /api/analyze` — runs reviewer or author-mode analysis against the submitted text.
 
 Reviewer mode returns a structured forensic memo: classification, confidence rationale, evidence cards, counter-evidence, section map, and reviewer reliance questions. Author mode uses the same signal analysis but adds coaching: what to keep, priority fixes, and before/after rewrite examples.
+
+The app can analyze pasted text, locally imported text-like documents (`.txt`, Markdown, HTML, CSV, JSON, and RTF), or text extracted from a URL. It also includes a light/dark theme toggle and a model picker populated from the OpenAI models available to the configured API key, filtered to general text/reasoning models useful for this workflow.

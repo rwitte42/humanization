@@ -10,15 +10,52 @@ const textSample = document.querySelector("#textSample");
 const wordCount = document.querySelector("#wordCount");
 const charCount = document.querySelector("#charCount");
 const signalDepth = document.querySelector("#signalDepth");
+const modelSelect = document.querySelector("#modelSelect");
+const themeToggle = document.querySelector("#themeToggle");
+const themeIcon = document.querySelector("#themeIcon");
+const sourceMeta = document.querySelector("#sourceMeta");
+const fileInput = document.querySelector("#fileInput");
+const urlInput = document.querySelector("#urlInput");
+const fetchUrlButton = document.querySelector("#fetchUrlButton");
+const sourcePanels = [...document.querySelectorAll("[data-source-panel]")];
+const copyResultButton = document.querySelector("#copyResultButton");
+let lastReportText = "";
 
 loadConfig();
+loadModels();
+loadTheme();
 updateModeChrome();
+updateSourcePanel();
 updateSampleStats();
 
 form.addEventListener("input", (event) => {
   if (event.target.name === "text") updateSampleStats();
   if (event.target.name === "mode") updateModeChrome();
+  if (event.target.name === "source") updateSourcePanel();
 });
+
+themeToggle.addEventListener("click", () => {
+  const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
+  setTheme(nextTheme);
+  localStorage.setItem("humanization-theme", nextTheme);
+});
+
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await readFileAsText(file);
+    textSample.value = cleanImportedText(text, file.name);
+    sourceMeta.textContent = `Imported ${file.name}`;
+    updateSampleStats();
+  } catch (error) {
+    sourceMeta.textContent = error.message;
+  }
+});
+
+fetchUrlButton.addEventListener("click", importUrl);
+copyResultButton.addEventListener("click", copyReport);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -29,6 +66,7 @@ form.addEventListener("submit", async (event) => {
     genre: formData.get("genre"),
     audience: formData.get("audience"),
     text: formData.get("text"),
+    model: modelSelect.value,
   };
 
   submitButton.disabled = true;
@@ -37,6 +75,10 @@ form.addEventListener("submit", async (event) => {
   renderLoading(payload.mode);
 
   try {
+    if (!payload.text || payload.text.trim().length < 40) {
+      throw new Error("Add a longer sample before running the analysis.");
+    }
+
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -52,6 +94,8 @@ form.addEventListener("submit", async (event) => {
       payload.mode === "author" ? "Author coaching" : "Reviewer memo";
     modelPill.textContent = data.model;
     renderAnalysis(data.analysis, data.output, payload.mode);
+    lastReportText = buildReportText(data.analysis, data.output, payload.mode);
+    copyResultButton.hidden = false;
   } catch (error) {
     resultTitle.textContent = "Needs attention";
     resultOutput.classList.add("error");
@@ -63,9 +107,15 @@ form.addEventListener("submit", async (event) => {
 
 clearButton.addEventListener("click", () => {
   form.reset();
+  fileInput.value = "";
+  urlInput.value = "";
+  sourceMeta.textContent = "Manual paste";
   updateModeChrome();
+  updateSourcePanel();
   updateSampleStats();
   resultTitle.textContent = "Ready when you are";
+  lastReportText = "";
+  copyResultButton.hidden = true;
   resultOutput.classList.remove("error");
   resultOutput.innerHTML = "";
   resultOutput.append(
@@ -75,6 +125,63 @@ clearButton.addEventListener("click", () => {
     ]),
   );
 });
+
+function updateSourcePanel() {
+  const source = new FormData(form).get("source") || "paste";
+  sourcePanels.forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.sourcePanel === source);
+  });
+
+  if (source === "paste") sourceMeta.textContent = "Manual paste";
+}
+
+async function copyReport() {
+  if (!lastReportText) return;
+
+  await navigator.clipboard.writeText(lastReportText);
+  const previous = copyResultButton.textContent;
+  copyResultButton.textContent = "Copied";
+  setTimeout(() => {
+    copyResultButton.textContent = previous;
+  }, 1400);
+}
+
+function buildReportText(analysis, rawOutput, mode) {
+  if (!analysis) return rawOutput || "";
+
+  const lines = [
+    `${mode === "author" ? "Author Coaching" : "Reviewer Memo"}`,
+    `Classification: ${analysis.classification || "Unclassified"}`,
+    `Confidence: ${analysis.confidence || "Unclear"}`,
+    "",
+    analysis.executive_summary || "",
+    analysis.confidence_rationale || "",
+  ].filter((line) => line !== undefined);
+
+  if (analysis.evidence?.length) {
+    lines.push("", "Evidence");
+    for (const item of analysis.evidence) {
+      lines.push(`- ${item.signal}: ${item.read}`);
+      if (item.excerpt) lines.push(`  Excerpt: ${item.excerpt}`);
+    }
+  }
+
+  if (mode === "author" && analysis.guidance?.priorities?.length) {
+    lines.push("", "Priorities");
+    for (const item of analysis.guidance.priorities) {
+      lines.push(`- ${item.title}: ${item.action}`);
+    }
+  }
+
+  if (mode === "reviewer" && analysis.reviewer_notes) {
+    lines.push("", "Reviewer Notes");
+    lines.push(`Strongest case: ${analysis.reviewer_notes.strongest_case || ""}`);
+    lines.push(`Weakest case: ${analysis.reviewer_notes.weakest_case || ""}`);
+    lines.push(`Would change with: ${analysis.reviewer_notes.what_would_change || ""}`);
+  }
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
 
 function updateModeChrome() {
   const mode = new FormData(form).get("mode");
@@ -117,6 +224,119 @@ async function loadConfig() {
     configStatus.textContent = "Config unavailable";
     configStatus.classList.add("missing");
   }
+}
+
+async function loadModels() {
+  try {
+    const response = await fetch("/api/models");
+    const data = await response.json();
+
+    if (!response.ok) throw new Error(data.error || "Model list unavailable.");
+
+    modelSelect.innerHTML = "";
+    for (const model of data.models || []) {
+      const option = document.createElement("option");
+      option.value = model;
+      option.textContent = model;
+      option.selected = model === data.defaultModel;
+      modelSelect.append(option);
+    }
+
+    if (!modelSelect.options.length) {
+      const option = document.createElement("option");
+      option.value = data.defaultModel || "";
+      option.textContent = data.defaultModel || "No models found";
+      modelSelect.append(option);
+    }
+  } catch (error) {
+    modelSelect.innerHTML = "";
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Using .env model";
+    modelSelect.append(option);
+    sourceMeta.textContent = error.message;
+  }
+}
+
+function loadTheme() {
+  const savedTheme = localStorage.getItem("humanization-theme");
+  const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+  setTheme(savedTheme || preferredTheme);
+}
+
+function setTheme(theme) {
+  document.body.dataset.theme = theme;
+  themeIcon.textContent = theme === "dark" ? "☾" : "◐";
+}
+
+async function importUrl() {
+  const url = urlInput.value.trim();
+  if (!url) {
+    sourceMeta.textContent = "Enter a URL to import.";
+    return;
+  }
+
+  fetchUrlButton.disabled = true;
+  sourceMeta.textContent = "Fetching URL...";
+
+  try {
+    const response = await fetch("/api/extract-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await response.json();
+
+    if (!response.ok) throw new Error(data.error || "Unable to import URL.");
+
+    textSample.value = data.text;
+    sourceMeta.textContent = data.title
+      ? `Imported ${data.title}`
+      : `Imported ${data.sourceUrl}`;
+    updateSampleStats();
+  } catch (error) {
+    sourceMeta.textContent = error.message;
+  } finally {
+    fetchUrlButton.disabled = false;
+  }
+}
+
+function readFileAsText(file) {
+  const supported =
+    file.type.startsWith("text/") ||
+    /\.(txt|md|markdown|html|htm|csv|json|rtf)$/i.test(file.name);
+
+  if (!supported) {
+    return Promise.reject(
+      new Error("Use a readable text-like file: TXT, Markdown, HTML, CSV, JSON, or RTF."),
+    );
+  }
+
+  if (file.size > 900_000) {
+    return Promise.reject(new Error("File is too large for this first-pass importer."));
+  }
+
+  return file.text();
+}
+
+function cleanImportedText(text, filename) {
+  if (/\.(html|htm)$/i.test(filename)) {
+    const doc = new DOMParser().parseFromString(text, "text/html");
+    return doc.body.textContent.replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  if (/\.rtf$/i.test(filename)) {
+    return text
+      .replace(/\\'[0-9a-f]{2}/gi, " ")
+      .replace(/[{}]/g, " ")
+      .replace(/\\[a-z]+\d*\s?/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  return text.trim();
 }
 
 function renderLoading(mode) {

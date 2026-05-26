@@ -15,7 +15,24 @@
               <p class="eyebrow">AI Authorship Analysis</p>
               <h1>Humanization Studio</h1>
             </div>
-            <div class="status" id="configStatus">Checking API setup...</div>
+            <div class="header-tools">
+              <label class="model-control">
+                <span>Model</span>
+                <select id="modelSelect" name="model">
+                  <option value="">Loading models...</option>
+                </select>
+              </label>
+              <button
+                class="icon-button"
+                type="button"
+                id="themeToggle"
+                aria-label="Toggle dark mode"
+                title="Toggle dark mode"
+              >
+                <span id="themeIcon">◐</span>
+              </button>
+              <div class="status" id="configStatus">Checking API setup...</div>
+            </div>
           </header>
 
           <form id="analysisForm" class="analysis-form">
@@ -49,16 +66,64 @@
               </label>
             </div>
 
-            <label class="sample-field">
-              <span>Text sample</span>
-              <textarea
-                id="textSample"
-                name="text"
-                rows="18"
-                placeholder="Paste the draft or sample you want assessed..."
-                required
-              ></textarea>
-            </label>
+            <section class="source-workspace" aria-label="Content source">
+              <div class="source-tabs" role="group" aria-label="Choose content source">
+                <label class="source-tab">
+                  <input type="radio" name="source" value="paste" checked />
+                  <span>Paste</span>
+                </label>
+                <label class="source-tab">
+                  <input type="radio" name="source" value="file" />
+                  <span>Upload</span>
+                </label>
+                <label class="source-tab">
+                  <input type="radio" name="source" value="url" />
+                  <span>URL</span>
+                </label>
+              </div>
+
+              <div class="source-panel active" data-source-panel="paste">
+                <label class="sample-field">
+                  <span>Text sample</span>
+                  <textarea
+                    id="textSample"
+                    name="text"
+                    rows="18"
+                    placeholder="Paste the draft or sample you want assessed..."
+                  ></textarea>
+                </label>
+              </div>
+
+              <div class="source-panel" data-source-panel="file">
+                <label class="file-drop" for="fileInput">
+                  <strong>Drop in a readable document</strong>
+                  <span>Text, Markdown, HTML, CSV, JSON, and RTF files are imported locally in your browser.</span>
+                </label>
+                <input
+                  id="fileInput"
+                  type="file"
+                  accept=".txt,.md,.markdown,.html,.htm,.csv,.json,.rtf,text/*"
+                />
+              </div>
+
+              <div class="source-panel" data-source-panel="url">
+                <label>
+                  <span>Source URL</span>
+                  <div class="url-row">
+                    <input
+                      id="urlInput"
+                      type="url"
+                      placeholder="https://example.com/article"
+                    />
+                    <button class="secondary" type="button" id="fetchUrlButton">
+                      <span>Import</span>
+                    </button>
+                  </div>
+                </label>
+              </div>
+
+              <div class="source-meta" id="sourceMeta">Manual paste</div>
+            </section>
 
             <div class="sample-stats" aria-live="polite">
               <span id="wordCount">0 words</span>
@@ -83,7 +148,12 @@
               <p class="eyebrow">Assessment</p>
               <h2 id="resultTitle">Ready when you are</h2>
             </div>
-            <span class="model-pill" id="modelPill">Model pending</span>
+            <div class="result-tools">
+              <button class="secondary compact" type="button" id="copyResultButton" hidden>
+                <span>Copy</span>
+              </button>
+              <span class="model-pill" id="modelPill">Model pending</span>
+            </div>
           </div>
           <div class="result-output" id="resultOutput">
             <div class="empty-state">

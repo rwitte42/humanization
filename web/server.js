@@ -11,6 +11,7 @@ const env = loadEnv(path.join(__dirname, ".env"));
 const PORT = Number(process.env.PORT || env.PORT || 8787);
 const OPENAI_MODEL = process.env.OPENAI_MODEL || env.OPENAI_MODEL || "gpt-5.1";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || env.OPENAI_API_KEY || "";
+const MAX_URL_BYTES = 900_000;
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -31,6 +32,15 @@ const server = createServer(async (req, res) => {
         configured: Boolean(OPENAI_API_KEY),
         model: OPENAI_MODEL,
       });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/models") {
+      return handleModels(res);
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/extract-url") {
+      const payload = await readJson(req);
+      return handleExtractUrl(res, payload);
     }
 
     if (req.method === "POST" && url.pathname === "/api/analyze") {
@@ -64,6 +74,7 @@ async function handleAnalyze(res, payload) {
   const mode = payload?.mode === "author" ? "author" : "reviewer";
   const genre = String(payload?.genre || "").trim() || "Unspecified";
   const audience = String(payload?.audience || "").trim() || "Unspecified";
+  const requestedModel = normalizeModelId(payload?.model) || OPENAI_MODEL;
 
   if (text.length < 40) {
     return sendJson(res, 400, {
@@ -79,7 +90,7 @@ async function handleAnalyze(res, payload) {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
+      model: requestedModel,
       instructions,
       input: [
         {
@@ -104,10 +115,110 @@ async function handleAnalyze(res, payload) {
   }
 
   sendJson(res, 200, {
-    model: OPENAI_MODEL,
+    model: requestedModel,
     analysis: parseAnalysis(extractText(data)),
     output: extractText(data),
   });
+}
+
+async function handleModels(res) {
+  if (!OPENAI_API_KEY) {
+    return sendJson(res, 200, {
+      configured: false,
+      defaultModel: OPENAI_MODEL,
+      models: [OPENAI_MODEL],
+    });
+  }
+
+  const response = await fetch("https://api.openai.com/v1/models", {
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    return sendJson(res, response.status, {
+      error: data?.error?.message || "Unable to fetch OpenAI models.",
+      defaultModel: OPENAI_MODEL,
+      models: [OPENAI_MODEL],
+    });
+  }
+
+  const models = (data?.data || [])
+    .map((model) => model?.id)
+    .filter(isUsefulTextModel)
+    .sort(compareModels);
+
+  if (!models.includes(OPENAI_MODEL)) {
+    models.unshift(OPENAI_MODEL);
+  }
+
+  sendJson(res, 200, {
+    configured: true,
+    defaultModel: OPENAI_MODEL,
+    models,
+  });
+}
+
+async function handleExtractUrl(res, payload) {
+  const rawUrl = String(payload?.url || "").trim();
+  let target;
+
+  try {
+    target = new URL(rawUrl);
+  } catch {
+    return sendJson(res, 400, { error: "Enter a valid URL." });
+  }
+
+  if (!["http:", "https:"].includes(target.protocol)) {
+    return sendJson(res, 400, { error: "URL must start with http:// or https://." });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const response = await fetch(target, {
+      headers: {
+        "User-Agent": "HumanizationStudio/0.1 (+https://github.com/rwitte42/humanization)",
+        Accept: "text/html,text/plain,application/xhtml+xml;q=0.9,*/*;q=0.6",
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      return sendJson(res, response.status, {
+        error: `URL returned HTTP ${response.status}.`,
+      });
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    const body = await readResponseWithLimit(response, MAX_URL_BYTES);
+    const title = extractTitle(body);
+    const text = contentType.includes("html") ? htmlToText(body) : body.trim();
+
+    if (!text || text.length < 40) {
+      return sendJson(res, 422, {
+        error: "Could not extract enough readable text from that URL.",
+      });
+    }
+
+    sendJson(res, 200, {
+      title,
+      text,
+      sourceUrl: target.toString(),
+      contentType,
+    });
+  } catch (error) {
+    const message =
+      error.name === "AbortError"
+        ? "Timed out while fetching that URL."
+        : "Could not fetch that URL.";
+    sendJson(res, 502, { error: message });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function buildInstructions(mode, genre, audience) {
@@ -222,6 +333,135 @@ function extractText(data) {
     }
   }
   return chunks.join("\n").trim() || "No text output returned.";
+}
+
+function normalizeModelId(model) {
+  const value = String(model || "").trim();
+  if (!value || value.length > 100) return "";
+  return /^[a-zA-Z0-9._:-]+$/.test(value) ? value : "";
+}
+
+function isUsefulTextModel(modelId) {
+  if (!modelId) return false;
+
+  const id = modelId.toLowerCase();
+  const excluded = [
+    "audio",
+    "babbage",
+    "chatgpt",
+    "codex",
+    "dall-e",
+    "davinci",
+    "deep-research",
+    "embedding",
+    "image",
+    "moderation",
+    "realtime",
+    "search",
+    "sora",
+    "tts",
+    "transcribe",
+    "whisper",
+  ];
+
+  if (excluded.some((part) => id.includes(part))) return false;
+
+  return (
+    id.startsWith("gpt-") ||
+    id.startsWith("o1") ||
+    id.startsWith("o3") ||
+    id.startsWith("o4")
+  );
+}
+
+function compareModels(a, b) {
+  const rank = (id) => {
+    const normalized = id.toLowerCase();
+    if (normalized === OPENAI_MODEL.toLowerCase()) return 0;
+    if (normalized.includes("mini")) return 1;
+    if (normalized.startsWith("gpt-5")) return 2;
+    if (normalized.startsWith("gpt-4.1")) return 3;
+    if (normalized.startsWith("o")) return 4;
+    return 5;
+  };
+
+  return rank(a) - rank(b) || a.localeCompare(b);
+}
+
+async function readResponseWithLimit(response, limit) {
+  const reader = response.body?.getReader();
+  if (!reader) return response.text();
+
+  const chunks = [];
+  let size = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    size += value.byteLength;
+    if (size > limit) {
+      throw new Error("URL content is too large to import.");
+    }
+    chunks.push(value);
+  }
+
+  return new TextDecoder().decode(concatUint8(chunks, size));
+}
+
+function concatUint8(chunks, size) {
+  const merged = new Uint8Array(size);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return merged;
+}
+
+function extractTitle(html) {
+  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return match ? decodeHtml(match[1]).trim().replace(/\s+/g, " ") : "";
+}
+
+function htmlToText(html) {
+  return decodeHtml(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<\/(p|div|section|article|header|footer|main|li|h[1-6])>/gi, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function decodeHtml(value) {
+  const named = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  };
+
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (entity, code) => {
+    if (code[0] === "#") {
+      const numeric =
+        code[1]?.toLowerCase() === "x"
+          ? Number.parseInt(code.slice(2), 16)
+          : Number.parseInt(code.slice(1), 10);
+      return Number.isFinite(numeric) ? String.fromCodePoint(numeric) : entity;
+    }
+
+    return named[code.toLowerCase()] || entity;
+  });
 }
 
 async function serveStatic(res, pathname) {
