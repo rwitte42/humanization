@@ -115,15 +115,17 @@ There is a difference between improving AI-assisted writing and helping someone 
 
 ```text
 .
-├── public/
-│   ├── app.js
-│   ├── index.html
-│   └── styles.css
 ├── SKILL.md
 ├── ai-authorship-analysis.skill
 ├── README.md
-├── server.js
-├── package.json
+├── web/
+│   ├── public/
+│   │   ├── app.js
+│   │   ├── index.html
+│   │   └── styles.css
+│   ├── .env.example
+│   ├── package.json
+│   └── server.js
 └── references/
     ├── humanization-playbook.md
     └── signal-taxonomy.md
@@ -131,11 +133,12 @@ There is a difference between improving AI-assisted writing and helping someone 
 
 ## Web app
 
-The web app is a dependency-free Node server that serves the UI from `public/` and calls the OpenAI Responses API from the server side. Keep the API key in `.env`; do not put it in browser code.
+The web app lives under `web/` as a standalone dependency-free Node server. It serves the UI from `web/public/`, reads the skill/reference files from the repository root, and calls the OpenAI Responses API from the server side. Keep the API key in `web/.env`; do not put it in browser code.
 
 1. Copy or edit the local environment file:
 
    ```sh
+   cd web
    cp .env.example .env
    ```
 

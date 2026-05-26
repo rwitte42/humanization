@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
 const publicDir = path.join(__dirname, "public");
 const env = loadEnv(path.join(__dirname, ".env"));
 const PORT = Number(process.env.PORT || env.PORT || 8787);
@@ -195,7 +196,7 @@ async function loadSkillContext() {
 
   const parts = await Promise.all(
     files.map(async (file) => {
-      const content = await readFile(path.join(__dirname, file), "utf8");
+      const content = await readFile(path.join(repoRoot, file), "utf8");
       return `--- ${file} ---\n${content}`;
     }),
   );

@@ -1,4 +1,7 @@
 .env
+web/.env
 node_modules/
+web/node_modules/
 .DS_Store
 npm-debug.log*
+web/npm-debug.log*
