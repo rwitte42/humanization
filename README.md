@@ -2,7 +2,7 @@
 
 A skill for evaluating whether writing reads as human-authored, AI-generated, or human–AI collaborative — and for improving AI-assisted drafts without sanding away the author’s voice.
 
-This repository contains the **AI Authorship Analysis** skill and its supporting reference material. The skill is designed for careful editorial reasoning, not for automated accusation or score-based AI detection.
+This repository contains the **AI Authorship Analysis** skill, its supporting reference material, and a small Node web app for running the workflow locally or behind Caddy on Bag End. The skill is designed for careful editorial reasoning, not for automated accusation or score-based AI detection.
 
 ## What this skill does
 
@@ -118,7 +118,59 @@ There is a difference between improving AI-assisted writing and helping someone 
 ├── SKILL.md
 ├── ai-authorship-analysis.skill
 ├── README.md
+├── web/
+│   ├── public/
+│   │   ├── app.js
+│   │   ├── index.html
+│   │   └── styles.css
+│   ├── .env.example
+│   ├── package.json
+│   └── server.js
 └── references/
     ├── humanization-playbook.md
     └── signal-taxonomy.md
 ```
+
+## Web app
+
+The web app lives under `web/` as a standalone dependency-free Node server. It serves the UI from `web/public/`, reads the skill/reference files from the repository root, and calls the OpenAI Responses API from the server side. Keep the API key in `web/.env`; do not put it in browser code.
+
+1. Copy or edit the local environment file:
+
+   ```sh
+   cd web
+   cp .env.example .env
+   ```
+
+1. Add your OpenAI API key:
+
+   ```sh
+   OPENAI_API_KEY=sk-...
+   OPENAI_MODEL=gpt-5.1
+   PORT=8787
+   ```
+
+1. Start the app:
+
+   ```sh
+   npm run dev
+   ```
+
+1. Open `http://localhost:8787`.
+
+For Bag End via Caddy, run the Node app on its configured local port and proxy the desired route or hostname to it:
+
+```caddyfile
+humanization.localhost {
+    reverse_proxy 127.0.0.1:8787
+}
+```
+
+The app exposes:
+
+- `GET /api/config` — reports whether the server sees an API key.
+- `POST /api/analyze` — runs reviewer or author-mode analysis against the submitted text.
+
+Reviewer mode returns a structured forensic memo: classification, confidence rationale, evidence cards, counter-evidence, section map, and reviewer reliance questions. Author mode uses the same signal analysis but adds coaching: what to keep, priority fixes, and before/after rewrite examples.
+
+The app can analyze pasted text, locally imported text-like documents (`.txt`, Markdown, HTML, CSV, JSON, and RTF), or text extracted from a URL. It also includes a light/dark theme toggle and a model picker populated from the OpenAI models available to the configured API key, filtered to general text/reasoning models useful for this workflow.
