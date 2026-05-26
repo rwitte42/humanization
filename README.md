@@ -2,7 +2,7 @@
 
 A skill for evaluating whether writing reads as human-authored, AI-generated, or human–AI collaborative — and for improving AI-assisted drafts without sanding away the author’s voice.
 
-This repository contains the **AI Authorship Analysis** skill and its supporting reference material. The skill is designed for careful editorial reasoning, not for automated accusation or score-based AI detection.
+This repository contains the **AI Authorship Analysis** skill, its supporting reference material, and a small Node web app for running the workflow locally or behind Caddy on Bag End. The skill is designed for careful editorial reasoning, not for automated accusation or score-based AI detection.
 
 ## What this skill does
 
@@ -115,10 +115,55 @@ There is a difference between improving AI-assisted writing and helping someone 
 
 ```text
 .
+├── public/
+│   ├── app.js
+│   ├── index.html
+│   └── styles.css
 ├── SKILL.md
 ├── ai-authorship-analysis.skill
 ├── README.md
+├── server.js
+├── package.json
 └── references/
     ├── humanization-playbook.md
     └── signal-taxonomy.md
 ```
+
+## Web app
+
+The web app is a dependency-free Node server that serves the UI from `public/` and calls the OpenAI Responses API from the server side. Keep the API key in `.env`; do not put it in browser code.
+
+1. Copy or edit the local environment file:
+
+   ```sh
+   cp .env.example .env
+   ```
+
+1. Add your OpenAI API key:
+
+   ```sh
+   OPENAI_API_KEY=sk-...
+   OPENAI_MODEL=gpt-5.1
+   PORT=8787
+   ```
+
+1. Start the app:
+
+   ```sh
+   npm run dev
+   ```
+
+1. Open `http://localhost:8787`.
+
+For Bag End via Caddy, run the Node app on its configured local port and proxy the desired route or hostname to it:
+
+```caddyfile
+humanization.localhost {
+    reverse_proxy 127.0.0.1:8787
+}
+```
+
+The app exposes:
+
+- `GET /api/config` — reports whether the server sees an API key.
+- `POST /api/analyze` — runs reviewer or author-mode analysis against the submitted text.

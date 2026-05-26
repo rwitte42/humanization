@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Humanization Studio</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workbench" aria-label="Humanization analysis workspace">
+        <div class="editor-pane">
+          <header class="masthead">
+            <div>
+              <p class="eyebrow">AI Authorship Analysis</p>
+              <h1>Humanization Studio</h1>
+            </div>
+            <div class="status" id="configStatus">Checking API setup...</div>
+          </header>
+
+          <form id="analysisForm" class="analysis-form">
+            <div class="control-row" role="group" aria-label="Analysis mode">
+              <label class="segmented">
+                <input type="radio" name="mode" value="reviewer" checked />
+                <span>Review</span>
+              </label>
+              <label class="segmented">
+                <input type="radio" name="mode" value="author" />
+                <span>Humanize</span>
+              </label>
+            </div>
+
+            <div class="context-grid">
+              <label>
+                <span>Genre</span>
+                <input
+                  name="genre"
+                  type="text"
+                  placeholder="essay, LinkedIn post, policy memo..."
+                />
+              </label>
+              <label>
+                <span>Audience</span>
+                <input
+                  name="audience"
+                  type="text"
+                  placeholder="reviewer, customer, executive team..."
+                />
+              </label>
+            </div>
+
+            <label class="sample-field">
+              <span>Text sample</span>
+              <textarea
+                name="text"
+                rows="18"
+                placeholder="Paste the draft or sample you want assessed..."
+                required
+              ></textarea>
+            </label>
+
+            <div class="actions">
+              <button class="primary" type="submit">
+                <span>Analyze</span>
+              </button>
+              <button class="secondary" type="button" id="clearButton">
+                <span>Clear</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <aside class="results-pane" aria-label="Analysis results">
+          <div class="result-header">
+            <div>
+              <p class="eyebrow">Assessment</p>
+              <h2 id="resultTitle">Ready when you are</h2>
+            </div>
+            <span class="model-pill" id="modelPill">Model pending</span>
+          </div>
+          <div class="result-output" id="resultOutput">
+            Paste a sample, choose whether you want an audit or author-mode
+            guidance, then run the analysis.
+          </div>
+        </aside>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
