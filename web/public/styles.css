@@ -314,10 +314,6 @@ body[data-theme="dark"] .source-workspace {
   background: var(--accent);
 }
 
-body[data-theme="dark"] .source-tab input:checked + span {
-  color: #071310;
-}
-
 .source-panel {
   display: none;
 }
@@ -575,6 +571,12 @@ body[data-theme="dark"] .result-output,
 body[data-theme="dark"] .source-tab span,
 body[data-theme="dark"] .file-drop {
   background: rgba(24, 34, 30, 0.76);
+}
+
+body[data-theme="dark"] .source-tab input:checked + span {
+  color: white;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .assessment-card + .assessment-card {
