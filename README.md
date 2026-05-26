@@ -122,4 +122,3 @@ There is a difference between improving AI-assisted writing and helping someone 
     ├── humanization-playbook.md
     └── signal-taxonomy.md
 ```
-Unicorn Innovation Labs builds practical human–AI workflows that preserve judgment, authorship, and agency rather than replacing them with opaque automation.
