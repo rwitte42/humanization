@@ -1,6 +1,6 @@
 # Humanization
 
-A public Unicorn Innovation Labs skill for evaluating whether writing reads as human-authored, AI-generated, or human–AI collaborative — and for improving AI-assisted drafts without sanding away the author’s voice.
+A skill for evaluating whether writing reads as human-authored, AI-generated, or human–AI collaborative — and for improving AI-assisted drafts without sanding away the author’s voice.
 
 This repository contains the **AI Authorship Analysis** skill and its supporting reference material. The skill is designed for careful editorial reasoning, not for automated accusation or score-based AI detection.
 
@@ -122,9 +122,4 @@ There is a difference between improving AI-assisted writing and helping someone 
     ├── humanization-playbook.md
     └── signal-taxonomy.md
 ```
-
-## Brand context
-
-This work is published under the Unicorn Innovation Labs brand: [unicorninnovationlabs.com](https://unicorninnovationlabs.com).
-
 Unicorn Innovation Labs builds practical human–AI workflows that preserve judgment, authorship, and agency rather than replacing them with opaque automation.
