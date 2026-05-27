@@ -12,6 +12,12 @@ const PORT = Number(process.env.PORT || env.PORT || 8787);
 const OPENAI_MODEL = process.env.OPENAI_MODEL || env.OPENAI_MODEL || "gpt-5.1";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || env.OPENAI_API_KEY || "";
 const MAX_URL_BYTES = 900_000;
+const OPENAI_ANALYZE_TIMEOUT_MS = readPositiveNumberEnv("OPENAI_ANALYZE_TIMEOUT_MS", 90_000);
+const OPENAI_ANALYZE_MAX_ATTEMPTS = Math.min(
+  3,
+  Math.max(1, readPositiveNumberEnv("OPENAI_ANALYZE_MAX_ATTEMPTS", 3)),
+);
+const MODEL_CACHE_TTL_MS = readPositiveNumberEnv("MODEL_CACHE_TTL_MS", 15 * 60_000);
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -22,6 +28,12 @@ const contentTypes = {
 };
 
 const skillContext = await loadSkillContext();
+let modelCache = null;
+
+function readPositiveNumberEnv(name, fallback) {
+  const value = Number(process.env[name] || env[name] || fallback);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
 
 const server = createServer(async (req, res) => {
   try {
@@ -45,11 +57,11 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/analyze") {
       const payload = await readJson(req);
-      return handleAnalyze(res, payload);
+      return handleAnalyze(req, res, payload);
     }
 
     if (req.method === "GET") {
-      return serveStatic(res, url.pathname);
+      return serveStatic(req, res, url.pathname);
     }
 
     sendJson(res, 405, { error: "Method not allowed" });
@@ -63,7 +75,7 @@ server.listen(PORT, () => {
   console.log(`Humanization app running at http://localhost:${PORT}`);
 });
 
-async function handleAnalyze(res, payload) {
+async function handleAnalyze(req, res, payload) {
   if (!OPENAI_API_KEY) {
     return sendJson(res, 503, {
       error: "Missing OPENAI_API_KEY. Add your key to .env, then restart the server.",
@@ -83,30 +95,41 @@ async function handleAnalyze(res, payload) {
   }
 
   const instructions = buildInstructions(mode, genre, audience);
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: requestedModel,
-      instructions,
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: `Analyze this text:\n\n${text}`,
-            },
-          ],
-        },
-      ],
-    }),
+  const clientAbort = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) clientAbort.abort();
   });
 
-  const data = await response.json().catch(() => ({}));
+  let response;
+  let data;
+  try {
+    ({ response, data } = await fetchOpenAIAnalysis(
+      {
+        model: requestedModel,
+        instructions,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `Analyze this text:\n\n${text}`,
+              },
+            ],
+          },
+        ],
+      },
+      clientAbort.signal,
+    ));
+  } catch (error) {
+    if (clientAbort.signal.aborted) return;
+    const timedOut = error.name === "TimeoutError";
+    return sendJson(res, timedOut ? 504 : 502, {
+      error: timedOut
+        ? "OpenAI analysis timed out after retrying. Try a shorter sample or a faster model."
+        : "OpenAI request failed after retrying.",
+    });
+  }
 
   if (!response.ok) {
     return sendJson(res, response.status, {
@@ -128,6 +151,10 @@ async function handleModels(res) {
       defaultModel: OPENAI_MODEL,
       models: [OPENAI_MODEL],
     });
+  }
+
+  if (modelCache && Date.now() - modelCache.checkedAt < MODEL_CACHE_TTL_MS) {
+    return sendJson(res, 200, modelCache.payload);
   }
 
   const response = await fetch("https://api.openai.com/v1/models", {
@@ -154,11 +181,13 @@ async function handleModels(res) {
     models.unshift(OPENAI_MODEL);
   }
 
-  sendJson(res, 200, {
+  const payload = {
     configured: true,
     defaultModel: OPENAI_MODEL,
     models,
-  });
+  };
+  modelCache = { checkedAt: Date.now(), payload };
+  sendJson(res, 200, payload);
 }
 
 async function handleExtractUrl(res, payload) {
@@ -388,6 +417,90 @@ function compareModels(a, b) {
   return rank(a) - rank(b) || a.localeCompare(b);
 }
 
+async function fetchOpenAIAnalysis(payload, externalSignal) {
+  let lastError = null;
+  let lastResponse = null;
+  let lastData = null;
+
+  for (let attempt = 1; attempt <= OPENAI_ANALYZE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(
+        "https://api.openai.com/v1/responses",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify(payload),
+        },
+        OPENAI_ANALYZE_TIMEOUT_MS,
+        externalSignal,
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok || !isRetryableOpenAIStatus(response.status) || attempt === OPENAI_ANALYZE_MAX_ATTEMPTS) {
+        return { response, data };
+      }
+
+      lastResponse = response;
+      lastData = data;
+    } catch (error) {
+      lastError = error;
+      if (externalSignal?.aborted || !isRetryableOpenAIError(error) || attempt === OPENAI_ANALYZE_MAX_ATTEMPTS) {
+        throw error;
+      }
+    }
+
+    await sleep(400 * attempt);
+  }
+
+  if (lastResponse) return { response: lastResponse, data: lastData || {} };
+  throw lastError || new Error("OpenAI request failed.");
+}
+
+async function fetchWithTimeout(url, init, timeoutMs, externalSignal) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const abortFromExternalSignal = () => controller.abort();
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else {
+    externalSignal?.addEventListener("abort", abortFromExternalSignal, { once: true });
+  }
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timedOut) {
+      const timeoutError = new Error("Request timed out.");
+      timeoutError.name = "TimeoutError";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
+  }
+}
+
+function isRetryableOpenAIStatus(status) {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+function isRetryableOpenAIError(error) {
+  return error.name === "TimeoutError" || error.name === "AbortError" || error instanceof TypeError;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function readResponseWithLimit(response, limit) {
   const reader = response.body?.getReader();
   if (!reader) return response.text();
@@ -464,11 +577,12 @@ function decodeHtml(value) {
   });
 }
 
-async function serveStatic(res, pathname) {
+async function serveStatic(req, res, pathname) {
   const cleanPath = pathname === "/" ? "/index.html" : pathname;
   const filePath = path.normalize(path.join(publicDir, cleanPath));
+  const relativePath = path.relative(publicDir, filePath);
 
-  if (!filePath.startsWith(publicDir)) {
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
     return sendJson(res, 403, { error: "Forbidden" });
   }
 
@@ -480,10 +594,20 @@ async function serveStatic(res, pathname) {
     });
     res.end(body);
   } catch {
-    const fallback = await readFile(path.join(publicDir, "index.html"));
-    res.writeHead(200, { "Content-Type": contentTypes[".html"] });
-    res.end(fallback);
+    if (shouldServeIndexFallback(req, pathname)) {
+      const fallback = await readFile(path.join(publicDir, "index.html"));
+      res.writeHead(200, { "Content-Type": contentTypes[".html"] });
+      return res.end(fallback);
+    }
+    sendJson(res, 404, { error: "Not found" });
   }
+}
+
+function shouldServeIndexFallback(req, pathname) {
+  if (pathname.startsWith("/api/")) return false;
+  if (path.extname(pathname)) return false;
+  const accept = req.headers.accept || "";
+  return accept.includes("text/html") || accept.includes("*/*");
 }
 
 function readJson(req) {

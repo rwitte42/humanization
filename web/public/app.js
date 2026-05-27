@@ -20,9 +20,10 @@ const fetchUrlButton = document.querySelector("#fetchUrlButton");
 const sourcePanels = [...document.querySelectorAll("[data-source-panel]")];
 const copyResultButton = document.querySelector("#copyResultButton");
 let lastReportText = "";
+let modelsLoaded = false;
+let modelsLoading = false;
 
 loadConfig();
-loadModels();
 loadTheme();
 updateModeChrome();
 updateSourcePanel();
@@ -56,6 +57,8 @@ fileInput.addEventListener("change", async () => {
 
 fetchUrlButton.addEventListener("click", importUrl);
 copyResultButton.addEventListener("click", copyReport);
+modelSelect.addEventListener("focus", ensureModelsLoaded);
+modelSelect.addEventListener("pointerdown", ensureModelsLoaded);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -215,6 +218,7 @@ async function loadConfig() {
     const data = await response.json();
 
     modelPill.textContent = data.model || "Model pending";
+    if (!modelsLoaded) setDefaultModelOption(data.model);
     configStatus.textContent = data.configured
       ? "API key configured"
       : "Add OPENAI_API_KEY to web/.env";
@@ -226,7 +230,23 @@ async function loadConfig() {
   }
 }
 
-async function loadModels() {
+async function ensureModelsLoaded() {
+  if (modelsLoaded || modelsLoading) return;
+  modelsLoading = true;
+  const selectedModel = modelSelect.value;
+  const loadingOption = document.createElement("option");
+  loadingOption.value = selectedModel;
+  loadingOption.textContent = selectedModel ? `Loading models... (${selectedModel})` : "Loading models...";
+  modelSelect.replaceChildren(loadingOption);
+
+  try {
+    modelsLoaded = await loadModels(selectedModel);
+  } finally {
+    modelsLoading = false;
+  }
+}
+
+async function loadModels(selectedModel = "") {
   try {
     const response = await fetch("api/models");
     const data = await response.json();
@@ -238,7 +258,7 @@ async function loadModels() {
       const option = document.createElement("option");
       option.value = model;
       option.textContent = model;
-      option.selected = model === data.defaultModel;
+      option.selected = model === (selectedModel || data.defaultModel);
       modelSelect.append(option);
     }
 
@@ -250,12 +270,19 @@ async function loadModels() {
     }
   } catch (error) {
     modelSelect.innerHTML = "";
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = "Using .env model";
-    modelSelect.append(option);
+    setDefaultModelOption(selectedModel || modelPill.textContent || "");
     sourceMeta.textContent = error.message;
+    return false;
   }
+  return true;
+}
+
+function setDefaultModelOption(model) {
+  modelSelect.innerHTML = "";
+  const option = document.createElement("option");
+  option.value = model || "";
+  option.textContent = model || "Using .env model";
+  modelSelect.append(option);
 }
 
 function loadTheme() {
