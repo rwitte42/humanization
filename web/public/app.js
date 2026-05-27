@@ -13,6 +13,8 @@ const signalDepth = document.querySelector("#signalDepth");
 const modelSelect = document.querySelector("#modelSelect");
 const themeToggle = document.querySelector("#themeToggle");
 const themeIcon = document.querySelector("#themeIcon");
+const settingsToggle = document.querySelector("#settingsToggle");
+const settingsMenu = document.querySelector("#settingsMenu");
 const sourceMeta = document.querySelector("#sourceMeta");
 const fileInput = document.querySelector("#fileInput");
 const urlInput = document.querySelector("#urlInput");
@@ -39,6 +41,20 @@ themeToggle.addEventListener("click", () => {
   const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
   setTheme(nextTheme);
   localStorage.setItem("humanization-theme", nextTheme);
+});
+
+settingsToggle.addEventListener("click", () => {
+  setSettingsMenuOpen(settingsMenu.hidden);
+});
+
+document.addEventListener("click", (event) => {
+  if (settingsMenu.hidden) return;
+  if (settingsMenu.contains(event.target) || settingsToggle.contains(event.target)) return;
+  setSettingsMenuOpen(false);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setSettingsMenuOpen(false);
 });
 
 fileInput.addEventListener("change", async () => {
@@ -283,6 +299,12 @@ function setDefaultModelOption(model) {
   option.value = model || "";
   option.textContent = model || "Using .env model";
   modelSelect.append(option);
+}
+
+function setSettingsMenuOpen(open) {
+  settingsMenu.hidden = !open;
+  settingsToggle.setAttribute("aria-expanded", String(open));
+  settingsToggle.setAttribute("aria-label", open ? "Close settings" : "Open settings");
 }
 
 function loadTheme() {

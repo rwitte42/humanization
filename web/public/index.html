@@ -16,12 +16,6 @@
               <h1>Humanization Studio</h1>
             </div>
             <div class="header-tools">
-              <label class="model-control">
-                <span>Model</span>
-                <select id="modelSelect" name="model">
-                  <option value="">Loading models...</option>
-                </select>
-              </label>
               <button
                 class="icon-button"
                 type="button"
@@ -31,7 +25,32 @@
               >
                 <span id="themeIcon">◐</span>
               </button>
-              <div class="status" id="configStatus">Checking API setup...</div>
+              <button
+                class="icon-button"
+                type="button"
+                id="settingsToggle"
+                aria-label="Open settings"
+                aria-expanded="false"
+                aria-controls="settingsMenu"
+                title="Settings"
+              >
+                <svg class="settings-gear" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 8.35a3.65 3.65 0 1 0 0 7.3 3.65 3.65 0 0 0 0-7.3Z" />
+                  <path d="M19.05 13.38c.06-.45.06-.91 0-1.36l2.02-1.55-1.92-3.33-2.38.96a8.1 8.1 0 0 0-1.17-.68L15.25 4h-6.5L8.4 7.42c-.41.19-.8.42-1.17.68l-2.38-.96-1.92 3.33 2.02 1.55a7.1 7.1 0 0 0 0 1.36l-2.02 1.55 1.92 3.33 2.38-.96c.37.26.76.49 1.17.68L8.75 21h6.5l.35-3.02c.41-.19.8-.42 1.17-.68l2.38.96 1.92-3.33-2.02-1.55Z" />
+                </svg>
+              </button>
+              <div class="settings-menu" id="settingsMenu" hidden>
+                <div class="settings-heading">
+                  <strong>Settings</strong>
+                  <span id="configStatus">Checking API setup...</span>
+                </div>
+                <label class="model-control">
+                  <span>Model</span>
+                  <select id="modelSelect" name="model">
+                    <option value="">Loading models...</option>
+                  </select>
+                </label>
+              </div>
             </div>
           </header>
 
