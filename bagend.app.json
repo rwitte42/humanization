@@ -6,7 +6,9 @@
     "title": "Humanization Studio",
     "eyebrow": "AI authorship analysis",
     "body": "Assess authorship signals and refine AI-assisted drafts without sanding away the author's voice.",
-    "ctaLabel": "Open studio"
+    "ctaLabel": "Open studio",
+    "imageSrc": "poster.png",
+    "imageAlt": "Editorial desk poster showing an annotated manuscript with subtle AI analysis overlays"
   },
   "runtime": {
     "type": "node-web",
