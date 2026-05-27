@@ -158,7 +158,12 @@ The web app lives under `web/` as a standalone dependency-free Node server. It s
 
 1. Open `http://localhost:8787`.
 
-For Bag End via Caddy, run the Node app on its configured local port and proxy the desired route or hostname to it:
+For Bag End, publish this as an on-demand gateway app at `/humanization/`.
+The Bag End gateway starts the Node server only when the launcher route is opened
+and stops it after the configured idle timeout.
+
+For a direct local Caddy proxy outside Bag End, run the Node app on its
+configured local port and proxy the desired route or hostname to it:
 
 ```caddyfile
 humanization.localhost {

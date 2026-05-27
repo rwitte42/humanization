@@ -1,0 +1,20 @@
+{
+  "schema": "https://bagend.local/schemas/app-manifest.v1.json",
+  "name": "Humanization Studio",
+  "category": "Utilities",
+  "display": {
+    "title": "Humanization Studio",
+    "eyebrow": "AI authorship analysis",
+    "body": "Assess authorship signals and refine AI-assisted drafts without sanding away the author's voice.",
+    "ctaLabel": "Open studio"
+  },
+  "runtime": {
+    "type": "node-web",
+    "health_path": "/api/config",
+    "start_command": [
+      "npm",
+      "start"
+    ],
+    "idle_timeout_seconds": 900
+  }
+}

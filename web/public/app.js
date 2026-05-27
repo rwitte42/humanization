@@ -79,7 +79,7 @@ form.addEventListener("submit", async (event) => {
       throw new Error("Add a longer sample before running the analysis.");
     }
 
-    const response = await fetch("/api/analyze", {
+    const response = await fetch("api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -211,7 +211,7 @@ function updateSampleStats() {
 
 async function loadConfig() {
   try {
-    const response = await fetch("/api/config");
+    const response = await fetch("api/config");
     const data = await response.json();
 
     modelPill.textContent = data.model || "Model pending";
@@ -228,7 +228,7 @@ async function loadConfig() {
 
 async function loadModels() {
   try {
-    const response = await fetch("/api/models");
+    const response = await fetch("api/models");
     const data = await response.json();
 
     if (!response.ok) throw new Error(data.error || "Model list unavailable.");
@@ -282,7 +282,7 @@ async function importUrl() {
   sourceMeta.textContent = "Fetching URL...";
 
   try {
-    const response = await fetch("/api/extract-url", {
+    const response = await fetch("api/extract-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
